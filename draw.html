@@ -1,0 +1,132 @@
+<html>
+    <body>
+
+        <canvas id="canvas" style="border: 1px solid" width="600" height="300"></canvas>
+        <h1>Coordinates: <span id="coords"></span></h1>
+        <button onclick="sendCanvasClear()">Clear</button>
+    </body>
+    <script>
+        const ws = new WebSocket(`ws://${window.location.host}/ws/`)
+        fetch(`http://${window.location.host}/sub`)
+        ws.onopen = function() {
+            ws.send(JSON.stringify({
+                type: "connected"
+            }))
+        }
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data)
+            console.log(data)
+            if (data.t === 'draw') {
+                drawAllCanvas(data.x, data.y)
+            }
+            else if (data.t === 'reset') {
+                resetAllCanvasCoords()
+            }
+            else if (data.t === 'clear') {
+                clearAllCanvases()
+            }
+        }
+
+        function sendCanvasCoords(canvas, x, y) {
+            ws.send(JSON.stringify({
+                c: canvas,
+                x: x,
+                y: y,
+                t: 'draw'
+            }))
+        }
+
+        function sendCanvasResetCoords() {
+            ws.send(JSON.stringify({
+                t: 'reset'
+            }))
+        }
+
+        function sendCanvasClear() {
+            ws.send(JSON.stringify({
+                t: 'clear'
+            }))
+        }
+
+        var canvases = [
+            "canvas"
+        ]
+        var raf;
+        var coords = document.getElementById("coords")
+
+        var c = {}
+        for (let canv of canvases) {
+            cv = document.getElementById(canv)
+            c[canv] = {
+                name: canv,
+                x: 0,
+                y: 0,
+                canvas: cv,
+                ctx: cv.getContext('2d'),
+                source: 'foo'
+            }
+            cv.addEventListener('mousemove', function(e) {
+                if (e.buttons !== 1) return;
+                var { realX, realY } = getRealCoordinates(c[canv], e.clientX, e.clientY);
+                //drawAllCanvas(realX, realY);
+                sendCanvasCoords(c[canv].name, realX, realY)
+            });
+            cv.addEventListener('mouseup', function(e) {
+                //resetAllCanvasCoords()
+                sendCanvasResetCoords()
+            });
+
+            cv.addEventListener('mouseout', function() {
+                //resetAllCanvasCoords()
+                sendCanvasResetCoords()
+            })
+        }
+
+        function drawAllCanvas(x, y) {
+            for (const [_, canvas] of Object.entries(c)) {
+                drawCanvas(canvas, x, y)
+            }
+        }
+
+        function resetAllCanvasCoords() {
+            for (const [_, canvas] of Object.entries(c)) {
+                canvas.x = 0
+                canvas.y = 0
+            }
+        }
+
+        function drawCanvas(canvas, x, y) {
+            if (canvas.x == 0 && canvas.y == 0) {
+                canvas.x = x;
+                canvas.y = y;
+            }
+            canvas.ctx.beginPath();
+            canvas.ctx.lineWidth = 2;
+            canvas.ctx.moveTo(canvas.x, canvas.y);
+            canvas.ctx.lineTo(x, y)
+            canvas.x = x;
+            canvas.y = y;
+            canvas.ctx.stroke();
+            coords.textContent = `${canvas.x}, ${canvas.y}`
+        }
+        function clearAllCanvases() {
+            for (const [_, canvas] of Object.entries(c)) {
+                clearCanvas(canvas)
+            }
+        }
+        function clearCanvas(canvas) {
+            canvas.ctx.fillStyle = 'rgba(255, 255, 255, 1)';
+            canvas.ctx.fillRect(0,0,canvas.canvas.width,canvas.canvas.height);
+        }
+
+        function getRealCoordinates(canvas, x, y) {
+            var realX = x - canvas.canvas.offsetLeft;
+            var realY = y - canvas.canvas.offsetTop;
+            realX = realX >= 0 ? realX : 0;
+            realY = realY >= 0 ? realY : 0;
+            return { realX, realY };
+        }
+
+
+    </script>
+</html>
