@@ -1,7 +1,7 @@
 <html>
     <body>
 
-        <canvas id="canvas" style="border: 1px solid" width="600" height="300"></canvas>
+        <canvas id="canvas" style="border: 1px solid" width="800" height="400"></canvas>
         <h1>Coordinates: <span id="coords"></span></h1>
         <h3>Received: <span id="wsreceived"></span></h3>
         <h3>Sent: <span id="wssent"></span></h3>
@@ -43,28 +43,21 @@
             clientdelay.textContent = data.cdelay
             //console.log(data)
             if (data.t === 'draw') {
-                drawAllCanvas(data.x, data.y)
-            }
-            else if (data.t === 'reset') {
-                resetAllCanvasCoords()
+                drawAllCanvas(data.fx, data.fy, data.tx, data.ty)
             }
             else if (data.t === 'clear') {
                 clearAllCanvases()
             }
         }
 
-        function sendCanvasCoords(canvas, x, y) {
+        function sendCanvasCoords(canvas, fx, fy, tx, ty) {
             wsSendObject({
                 c: canvas,
-                x: x,
-                y: y,
+                fx: fx,
+                fy: fy,
+                tx: tx,
+                ty: ty,
                 t: 'draw'
-            })
-        }
-
-        function sendCanvasResetCoords() {
-            wsSendObject({
-                t: 'reset'
             })
         }
 
@@ -78,6 +71,9 @@
             "canvas"
         ]
 
+
+        let localX = 0
+        let localY = 0
 
         var c = {}
         for (let canv of canvases) {
@@ -93,47 +89,33 @@
             cv.addEventListener('mousemove', function(e) {
                 if (e.buttons !== 1) return;
                 var { realX, realY } = getRealCoordinates(c[canv], e.clientX, e.clientY);
-                //drawAllCanvas(realX, realY);
-                sendCanvasCoords(c[canv].name, realX, realY)
-            });
-            cv.addEventListener('mouseup', function(e) {
-                //resetAllCanvasCoords()
-                sendCanvasResetCoords()
+                sendCanvasCoords(c[canv].name, localX, localY, realX, realY)
+                localX = realX
+                localY = realY
             });
 
-            cv.addEventListener('mouseout', function() {
-                //resetAllCanvasCoords()
-                sendCanvasResetCoords()
+            cv.addEventListener('mousedown', function(e) {
+                var { realX, realY } = getRealCoordinates(c[canv], e.clientX, e.clientY);
+                localX = realX
+                localY = realY
             })
         }
 
-        function drawAllCanvas(x, y) {
+        function drawAllCanvas(fx, fy, tx, ty) {
             for (const [_, canvas] of Object.entries(c)) {
-                drawCanvas(canvas, x, y)
+                drawCanvas(canvas, fx, fy, tx, ty)
             }
         }
 
-        function resetAllCanvasCoords() {
-            for (const [_, canvas] of Object.entries(c)) {
-                canvas.x = 0
-                canvas.y = 0
-            }
-        }
-
-        function drawCanvas(canvas, x, y) {
-            if (canvas.x == 0 && canvas.y == 0) {
-                canvas.x = x;
-                canvas.y = y;
-            }
+        function drawCanvas(canvas, fx, fy, tx, ty) {
             canvas.ctx.beginPath();
             canvas.ctx.lineWidth = 2;
-            canvas.ctx.moveTo(canvas.x, canvas.y);
-            canvas.ctx.lineTo(x, y)
-            canvas.x = x;
-            canvas.y = y;
+            canvas.ctx.moveTo(fx, fy)
+            canvas.ctx.lineTo(tx, ty)
             canvas.ctx.stroke();
-            coords.textContent = `${canvas.x}, ${canvas.y}`
+            coords.textContent = `${tx}, ${ty}`
         }
+
         function clearAllCanvases() {
             for (const [_, canvas] of Object.entries(c)) {
                 clearCanvas(canvas)
