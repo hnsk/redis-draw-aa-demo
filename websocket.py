@@ -1,6 +1,6 @@
-import asyncio
 import json
 from os import environ
+from time import time
 
 import redis.asyncio as redis
 
@@ -32,7 +32,9 @@ class ConnectionManager:
         print("subscribed")
         async for message in sub.listen():
             if message["data"] != 1:
-                await self.send_broadcast(json.loads(message["data"]))
+                data = json.loads(message["data"])
+                data["sdelay"] = f"{(time() - data['stime']) * 1000:.3f}"
+                await self.send_broadcast(data)
 
     async def connect(self, websocket: WebSocket) -> None:
         """ Accept WebSocket connection and subscribe to available streams. """
@@ -74,6 +76,7 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             res = await websocket.receive_json()
+            res['stime'] = time()
             await rpool.publish("draw", json.dumps(res))
 
     except Exception as e:

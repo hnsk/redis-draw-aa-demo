@@ -3,11 +3,31 @@
 
         <canvas id="canvas" style="border: 1px solid" width="600" height="300"></canvas>
         <h1>Coordinates: <span id="coords"></span></h1>
+        <h3>Received: <span id="wsreceived"></span></h3>
+        <h3>Sent: <span id="wssent"></span></h3>
+        <h3>Delay: Server - <span id="serverdelay"></span>ms, Client <span id="clientdelay"></span>ms</h3>
         <button onclick="sendCanvasClear()">Clear</button>
     </body>
     <script>
+        let wsReceived = 0;
+        let wsSent = 0;
+        var coords = document.getElementById("coords")
+        var wsreceived = document.getElementById("wsreceived")
+        var wssent = document.getElementById("wssent")
+        var serverdelay = document.getElementById("serverdelay")
+        var clientdelay = document.getElementById("clientdelay")
+
         const ws = new WebSocket(`ws://${window.location.host}/ws/`)
         fetch(`http://${window.location.host}/sub`)
+
+        function wsSendObject(obj) {
+            const d = new Date()
+            obj.ctime = d.getTime()
+            ws.send(JSON.stringify(obj))
+            wsSent++
+            wssent.textContent = wsSent
+        }
+
         ws.onopen = function() {
             ws.send(JSON.stringify({
                 type: "connected"
@@ -15,7 +35,13 @@
         }
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data)
-            console.log(data)
+            const d = new Date()
+            data.cdelay = d.getTime() - data.ctime
+            wsReceived++
+            wsreceived.textContent = wsReceived
+            serverdelay.textContent = data.sdelay
+            clientdelay.textContent = data.cdelay
+            //console.log(data)
             if (data.t === 'draw') {
                 drawAllCanvas(data.x, data.y)
             }
@@ -28,31 +54,30 @@
         }
 
         function sendCanvasCoords(canvas, x, y) {
-            ws.send(JSON.stringify({
+            wsSendObject({
                 c: canvas,
                 x: x,
                 y: y,
                 t: 'draw'
-            }))
+            })
         }
 
         function sendCanvasResetCoords() {
-            ws.send(JSON.stringify({
+            wsSendObject({
                 t: 'reset'
-            }))
+            })
         }
 
         function sendCanvasClear() {
-            ws.send(JSON.stringify({
+            wsSendObject({
                 t: 'clear'
-            }))
+            })
         }
 
         var canvases = [
             "canvas"
         ]
-        var raf;
-        var coords = document.getElementById("coords")
+
 
         var c = {}
         for (let canv of canvases) {
