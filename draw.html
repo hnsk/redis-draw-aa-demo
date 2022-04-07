@@ -30,7 +30,7 @@
 
         ws.onopen = function() {
             ws.send(JSON.stringify({
-                type: "connected"
+                t: "connected"
             }))
         }
         ws.onmessage = (event) => {

@@ -1,3 +1,4 @@
+import asyncio
 import json
 from os import environ
 from time import time
@@ -76,8 +77,18 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             res = await websocket.receive_json()
-            res['stime'] = time()
-            await rpool.publish("draw", json.dumps(res))
+            res["stime"] = time()
+            if res["t"] == "connected":
+                await read_draw_stream(websocket)
+            else:
+                await rpool.publish("draw", json.dumps(res))
+                if res["t"] == "clear":
+                    await rpool.delete("drawstream")
+                else:
+                    await rpool.xadd(
+                        name="drawstream",
+                        fields={"json": json.dumps(res)}
+                    )
 
     except Exception as e:
         print(e)
@@ -90,3 +101,23 @@ async def subscribe(background_tasks: BackgroundTasks):
     if not manager.subscribed:
         print("subscribing")
         background_tasks.add_task(manager.subscribe)    
+
+async def read_draw_stream(websocket: WebSocket):
+    start_id = 0
+    while True:
+        results = await rpool.xread(
+            streams={"drawstream": start_id},
+            count=100
+        )
+        if results:
+            for entry in results[0][1]:
+                await manager.send(websocket, json.loads(entry[1]["json"]))
+            start_id = results[0][1][-1][0]
+        else:
+            break
+
+async def main():
+    pass
+
+if __name__ == '__main__':
+    asyncio.run(main())
