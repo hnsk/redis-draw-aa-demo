@@ -4,6 +4,8 @@
  * Uses [FastAPI](https://fastapi.tiangolo.com/) for serving WebSockets
  * Draw commands are communicated using Redis PubSub
  * There is no local echo
+ * Drawings are also stored to a [Redis Stream](https://redis.io/docs/manual/data-types/streams/) for replay
+   * Stream is deleted on clear
 
 ## Usage
 
