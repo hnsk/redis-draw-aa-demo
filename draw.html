@@ -139,6 +139,23 @@
                 localY = realY
                 sendPointCoords(c[canv], realX, realY)
             })
+
+            cv.addEventListener('touchstart', function(e) {
+                e.preventDefault()
+
+                var { realX, realY } = getRealCoordinates(c[canv], e.touches[0].clientX, e.touches[0].clientY);
+                localX = realX
+                localY = realY
+                sendPointCoords(c[canv], realX, realY)
+            })
+
+            cv.addEventListener('touchmove', function(e) {
+                e.preventDefault()
+                var { realX, realY } = getRealCoordinates(c[canv], e.touches[0].clientX, e.touches[0].clientY);
+                sendCanvasCoords(c[canv].name, localX, localY, realX, realY)
+                localX = realX
+                localY = realY
+            })
         }
 
         function drawAllCanvas(fx, fy, tx, ty, color, width) {
