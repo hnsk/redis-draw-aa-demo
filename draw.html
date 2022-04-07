@@ -41,8 +41,14 @@
             alpha: false,
         })
 
-        const ws = new WebSocket(`ws://${window.location.host}/ws/`)
-        fetch(`http://${window.location.host}/sub`)
+        if (location.protocol !== 'https:') {
+            const ws = new WebSocket(`ws://${window.location.host}/ws/`)
+            fetch(`http://${window.location.host}/sub`)
+        }
+        else {
+            const ws = new WebSocket(`wss://${window.location.host}/ws/`)
+            fetch(`https://${window.location.host}/sub`)
+        }
 
         function wsSendObject(obj) {
             const d = new Date()
