@@ -1,7 +1,25 @@
 <html>
+    <head>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/mdbassit/Coloris@latest/dist/coloris.min.css"/>
+<script src="https://cdn.jsdelivr.net/gh/mdbassit/Coloris@latest/dist/coloris.min.js"></script>
+    </head>
     <body>
 
         <canvas id="canvas" style="border: 1px solid" width="1000" height="700"></canvas>
+        <br /><hr />
+        <input type="text" id="colorpicker" size=15 data-coloris value="#000000"></input>
+        <select name="brushwidth" id="brushwidth">
+            <option value="1">1px</option>
+            <option value="2" selected >2px</option>
+            <option value="3">3px</option>
+            <option value="4">4px</option>
+            <option value="5">5px</option>
+            <option value="6">6px</option>
+            <option value="7">7px</option>
+            <option value="8">8px</option>
+            <option value="9">9px</option>
+            <option value="10">10px</option>
+        </select>
         <h1>Coordinates: <span id="coords"></span></h1>
         <h3>Received: <span id="wsreceived"></span></h3>
         <h3>Sent: <span id="wssent"></span></h3>
@@ -16,6 +34,12 @@
         var wssent = document.getElementById("wssent")
         var serverdelay = document.getElementById("serverdelay")
         var clientdelay = document.getElementById("clientdelay")
+        var colorpicker = document.getElementById("colorpicker")
+        var brushwidth = document.getElementById("brushwidth")
+
+        Coloris({
+            alpha: false,
+        })
 
         const ws = new WebSocket(`ws://${window.location.host}/ws/`)
         fetch(`http://${window.location.host}/sub`)
@@ -43,7 +67,7 @@
             clientdelay.textContent = data.cdelay
             //console.log(data)
             if (data.t === 'draw') {
-                drawAllCanvas(data.fx, data.fy, data.tx, data.ty)
+                drawAllCanvas(data.fx, data.fy, data.tx, data.ty, data.color, data.width)
             }
             else if (data.t === 'clear') {
                 clearAllCanvases()
@@ -57,6 +81,8 @@
                 fy: fy,
                 tx: tx,
                 ty: ty,
+                color: colorpicker.value,
+                width: brushwidth.value,
                 t: 'draw'
             })
         }
@@ -101,18 +127,20 @@
             })
         }
 
-        function drawAllCanvas(fx, fy, tx, ty) {
+        function drawAllCanvas(fx, fy, tx, ty, color, width) {
             for (const [_, canvas] of Object.entries(c)) {
-                drawCanvas(canvas, fx, fy, tx, ty)
+                drawCanvas(canvas, fx, fy, tx, ty, color, width)
             }
         }
 
-        function drawCanvas(canvas, fx, fy, tx, ty) {
-            canvas.ctx.beginPath();
-            canvas.ctx.lineWidth = 2;
+        function drawCanvas(canvas, fx, fy, tx, ty, color, width) {
+            canvas.ctx.beginPath()
+            canvas.ctx.lineWidth = width;
+            canvas.ctx.lineCap = 'round'
             canvas.ctx.moveTo(fx, fy)
             canvas.ctx.lineTo(tx, ty)
-            canvas.ctx.stroke();
+            canvas.ctx.strokeStyle = color
+            canvas.ctx.stroke()
             coords.textContent = `${tx}, ${ty}`
         }
 
