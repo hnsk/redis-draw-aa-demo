@@ -69,6 +69,9 @@
             if (data.t === 'draw') {
                 drawAllCanvas(data.fx, data.fy, data.tx, data.ty, data.color, data.width)
             }
+            else if (data.t === 'point') {
+                drawPointToAllAllCanvas(data.x, data.y, data.color, data.width)
+            }
             else if (data.t === 'clear') {
                 clearAllCanvases()
             }
@@ -84,6 +87,16 @@
                 color: colorpicker.value,
                 width: brushwidth.value,
                 t: 'draw'
+            })
+        }
+        function sendPointCoords(canvas, x, y) {
+            wsSendObject({
+                c: canvas,
+                x: x,
+                y: y,
+                color: colorpicker.value,
+                width: brushwidth.value,
+                t: 'point'
             })
         }
 
@@ -124,6 +137,7 @@
                 var { realX, realY } = getRealCoordinates(c[canv], e.clientX, e.clientY);
                 localX = realX
                 localY = realY
+                sendPointCoords(c[canv], realX, realY)
             })
         }
 
@@ -142,6 +156,21 @@
             canvas.ctx.strokeStyle = color
             canvas.ctx.stroke()
             coords.textContent = `${tx}, ${ty}`
+        }
+
+        function drawPointToAllAllCanvas(x, y, color, width) {
+            for (const [_, canvas] of Object.entries(c)) {
+                drawPointToCanvas(canvas, x, y, color, width)
+            }
+        }
+        function drawPointToCanvas(canvas, x, y, color, width) {
+            canvas.ctx.beginPath()
+            canvas.ctx.strokeStyle = color
+            canvas.ctx.fillStyle = color
+            canvas.ctx.lineWidth = 1
+            canvas.ctx.arc(x, y, width/2, 0, 2*Math.PI)
+            canvas.ctx.fill()
+            coords.textContent = `${x}, ${y}`
         }
 
         function clearAllCanvases() {
