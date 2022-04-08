@@ -35,8 +35,10 @@ class ConnectionManager:
         while self.subscribed[canvas_id]:
             try:
                 sub = rpool.pubsub()
-                await sub.subscribe(f"draw:{canvas_id}")
+                await sub.subscribe(f"draw:{canvas_id}", f"chat:{canvas_id}")
                 async for message in sub.listen():
+                    if message["type"] == "subscribe":
+                        continue
                     try:
                         data = json.loads(message["data"])
                         data["sdelay"] = f"{(time() - data['stime']) * 1000:.3f}"
@@ -52,14 +54,13 @@ class ConnectionManager:
         """ Accept WebSocket connection and subscribe to available streams. """
         if canvas_id not in self.active_connections:
             self.active_connections[canvas_id] = []
+            self.subscribed[canvas_id] = False
         self.active_connections[canvas_id].append(websocket)
         await websocket.accept()
 
     def disconnect(self, canvas_id: uuid.UUID, websocket: WebSocket) -> None:
         """ On client disconnection remove client from active connections. """
         self.active_connections[canvas_id].remove(websocket)
-        if len(self.active_connections[canvas_id]) == 0:
-            self.subscribed[canvas_id] = False
 
     @staticmethod
     async def send(websocket: WebSocket, message):
@@ -115,10 +116,16 @@ class CanvasClear(BaseModel):
     stime: float
     ctime: int
 
+class ChatMessage(BaseModel):
+    t: Literal["chat"]
+    stime: float
+    m: constr(max_length=512)
+
 TYPES = {
     "point": CanvasPoint,
     "line": CanvasLine,
-    "clear": CanvasClear
+    "clear": CanvasClear,
+    "chat": ChatMessage
 }
 
 @app.websocket("/ws/{canvas_id}")
@@ -131,7 +138,8 @@ async def websocket_endpoint(canvas_id: uuid.UUID, websocket: WebSocket):
             res = await websocket.receive_json()
             if "t" in res.keys():
                 if res["t"] == "connected":
-                    await read_draw_stream(canvas_id, websocket)
+                    await read_stream(canvas_id, "drawstream", websocket)
+                    await read_stream(canvas_id, "chatstream", websocket)
                 else:
                     try:
                         res_json = ""
@@ -140,13 +148,19 @@ async def websocket_endpoint(canvas_id: uuid.UUID, websocket: WebSocket):
                             res_json = TYPES[res["t"]](**res).json()
                         else:
                             await manager.send(websocket, {"error": "invalid type"})
-
-                        await rpool.publish(f"draw:{canvas_id}", res_json)
-                        if res["t"] == "clear":
-                            await rpool.delete(f"drawstream:{canvas_id}")
+                        if res["t"] != "chat":
+                            await rpool.publish(f"draw:{canvas_id}", res_json)
+                            if res["t"] == "clear":
+                                await rpool.delete(f"drawstream:{canvas_id}")
+                            else:
+                                await rpool.xadd(
+                                    name=f"drawstream:{canvas_id}",
+                                    fields={"json": res_json}
+                                )
                         else:
+                            await rpool.publish(f"chat:{canvas_id}", res_json)
                             await rpool.xadd(
-                                name=f"drawstream:{canvas_id}",
+                                name=f"chatstream:{canvas_id}",
                                 fields={"json": res_json}
                             )
                     except ValidationError:
@@ -161,14 +175,16 @@ async def websocket_endpoint(canvas_id: uuid.UUID, websocket: WebSocket):
 @app.get("/sub/{canvas_id}")
 async def subscribe(canvas_id: uuid.UUID, background_tasks: BackgroundTasks):
     """ Subscribe needs to be called by one client for background processing. """
-    if canvas_id not in manager.subscribed or not manager.subscribed[canvas_id]:
+    if not manager.subscribed[canvas_id]:
+        print("foo")
         background_tasks.add_task(manager.subscribe, canvas_id)
 
-async def read_draw_stream(canvas_id: uuid.UUID, websocket: WebSocket):
+async def read_stream(canvas_id: uuid.UUID, stream: str, websocket: WebSocket):
     start_id = 0
     while True:
         results = await rpool.xread(
-            streams={f"drawstream:{canvas_id}": start_id},
+            streams={
+                f"{stream}:{canvas_id}": start_id,},
             count=100
         )
         if results:

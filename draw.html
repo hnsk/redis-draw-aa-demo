@@ -4,8 +4,9 @@
 <script src="https://cdn.jsdelivr.net/gh/mdbassit/Coloris@latest/dist/coloris.min.js"></script>
     </head>
     <body>
-
+        <div>
         <canvas id="canvas" style="border: 1px solid" width="1000" height="700"></canvas>
+        </div>
         <br /><hr />
         <input type="text" id="colorpicker" size=15 data-coloris value="#000000"></input>
         <select name="brushwidth" id="brushwidth">
@@ -20,6 +21,9 @@
             <option value="9">9px</option>
             <option value="10">10px</option>
         </select>
+        <br /><br />
+        Chat: <input type="text" size="100" id="chatinput" />
+        <ul id="chat"></ul>
         <h1>Coordinates: <span id="coords"></span></h1>
         <h3>Received: <span id="wsreceived"></span></h3>
         <h3>Sent: <span id="wssent"></span></h3>
@@ -36,6 +40,19 @@
         var clientdelay = document.getElementById("clientdelay")
         var colorpicker = document.getElementById("colorpicker")
         var brushwidth = document.getElementById("brushwidth")
+        var chatinput = document.getElementById("chatinput")
+
+        chatinput.addEventListener("keyup", function(e) {
+
+            if (e.keyCode === 13) {
+                const chatMessage = {
+                    m: chatinput.value,
+                    t: "chat"
+                }
+                wsSendObject(chatMessage)
+                chatinput.value = ""
+            }
+        })
 
         Coloris({
             alpha: false,
@@ -68,9 +85,8 @@
                 ws = new WebSocket(`wss://${window.location.host}/ws/${canvas_uuid}`)
             }
 
-            fetch(`${location.protocol}//${window.location.host}/sub/${canvas_uuid}`)
-
             ws.onopen = function() {
+                fetch(`${location.protocol}//${window.location.host}/sub/${canvas_uuid}`)
                 clearAllCanvases()
                 ws.send(JSON.stringify({
                     t: "connected"
@@ -84,7 +100,7 @@
                 wsreceived.textContent = wsReceived
                 serverdelay.textContent = data.sdelay
                 clientdelay.textContent = data.cdelay
-                //console.log(data)
+                console.log(data)
                 if (data.t === 'line') {
                     drawAllCanvas(data.fx, data.fy, data.tx, data.ty, data.color, data.width)
                 }
@@ -93,6 +109,12 @@
                 }
                 else if (data.t === 'clear') {
                     clearAllCanvases()
+                }
+                else if (data.t === 'chat') {
+                    let chat = document.getElementById("chat")
+                    let li = document.createElement("li")
+                    li.appendChild(document.createTextNode(data.m))
+                    chat.prepend(li)
                 }
             }
 
@@ -235,8 +257,9 @@
         }
 
         function getRealCoordinates(canvas, x, y) {
-            var realX = x - canvas.canvas.offsetLeft;
-            var realY = y - canvas.canvas.offsetTop;
+            var rect = canvas.canvas.getBoundingClientRect();
+            var realX = x - rect.left
+            var realY = y - rect.top;
             realX = realX >= 0 ? realX : 0;
             realY = realY >= 0 ? realY : 0;
             return { realX, realY };
