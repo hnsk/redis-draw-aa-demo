@@ -2,11 +2,13 @@ import asyncio
 import json
 from os import environ
 from time import time
+from typing import Literal, Optional
 
 import redis.asyncio as redis
 
 from fastapi import BackgroundTasks, FastAPI, WebSocket
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, constr, Field, ValidationError
 
 REDIS_HOST = environ.get('REDIS_HOST') or 'localhost'
 REDIS_PORT = int(environ.get('REDIS_PORT') or '6379')
@@ -69,6 +71,43 @@ async def startup_event():
 async def read_index():
     return FileResponse('draw.html')
 
+class CanvasPoint(BaseModel):
+    """ BaseModel to define draw point message. """
+    t: Literal["point"]
+    c: str
+    x: int
+    y: int
+    color: Optional[constr(max_length=9, regex="^#")]
+    width: int = Field(ge=1, le=10)
+    stime: float
+    ctime: float
+
+class CanvasLine(BaseModel):
+    """ BaseModel to define draw line message. """
+    t: Literal["line"]
+    c: str
+    fx: int
+    fy: int
+    tx: int
+    ty: int
+    color: Optional[constr(max_length=9, regex="^#")]
+    width: int = Field(ge=1, le=10)
+    stime: float
+    ctime: float
+
+class CanvasClear(BaseModel):
+    """ Basemodel to define a clear canvas message. """
+    t: Literal["clear"]
+    c: Optional[str]
+    stime: float
+    ctime: float
+
+TYPES = {
+    "point": CanvasPoint,
+    "line": CanvasLine,
+    "clear": CanvasClear
+}
+
 @app.websocket("/ws/")
 async def websocket_endpoint(websocket: WebSocket):
     """ Draw client websocket endpoint. """
@@ -77,18 +116,30 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             res = await websocket.receive_json()
-            res["stime"] = time()
-            if res["t"] == "connected":
-                await read_draw_stream(websocket)
-            else:
-                await rpool.publish("draw", json.dumps(res))
-                if res["t"] == "clear":
-                    await rpool.delete("drawstream")
+            if "t" in res.keys():
+                if res["t"] == "connected":
+                    await read_draw_stream(websocket)
                 else:
-                    await rpool.xadd(
-                        name="drawstream",
-                        fields={"json": json.dumps(res)}
-                    )
+                    try:
+                        res_json = ""
+                        res["stime"] = time()
+                        if res["t"] in TYPES:
+                            res_json = TYPES[res["t"]](**res).json()
+                        else:
+                            await manager.send(websocket, {"error": "invalid type"})
+
+                        await rpool.publish("draw", res_json)
+                        if res["t"] == "clear":
+                            await rpool.delete("drawstream")
+                        else:
+                            await rpool.xadd(
+                                name="drawstream",
+                                fields={"json": res_json}
+                            )
+                    except ValidationError:
+                        await manager.send(websocket, {"error": "invalid message"})
+            else:
+                await manager.send(websocket, {"error": "no message type specified"})
 
     except Exception as e:
         print(e)

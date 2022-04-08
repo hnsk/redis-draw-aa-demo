@@ -41,12 +41,13 @@
             alpha: false,
         })
 
+        let ws;
         if (location.protocol !== 'https:') {
-            const ws = new WebSocket(`ws://${window.location.host}/ws/`)
+            ws = new WebSocket(`ws://${window.location.host}/ws/`)
             fetch(`http://${window.location.host}/sub`)
         }
         else {
-            const ws = new WebSocket(`wss://${window.location.host}/ws/`)
+            ws = new WebSocket(`wss://${window.location.host}/ws/`)
             fetch(`https://${window.location.host}/sub`)
         }
 
@@ -72,7 +73,7 @@
             serverdelay.textContent = data.sdelay
             clientdelay.textContent = data.cdelay
             //console.log(data)
-            if (data.t === 'draw') {
+            if (data.t === 'line') {
                 drawAllCanvas(data.fx, data.fy, data.tx, data.ty, data.color, data.width)
             }
             else if (data.t === 'point') {
@@ -92,7 +93,7 @@
                 ty: ty,
                 color: colorpicker.value,
                 width: brushwidth.value,
-                t: 'draw'
+                t: 'line'
             })
         }
         function sendPointCoords(canvas, x, y) {
@@ -125,8 +126,6 @@
             cv = document.getElementById(canv)
             c[canv] = {
                 name: canv,
-                x: 0,
-                y: 0,
                 canvas: cv,
                 ctx: cv.getContext('2d'),
                 source: 'foo'
@@ -143,7 +142,7 @@
                 var { realX, realY } = getRealCoordinates(c[canv], e.clientX, e.clientY);
                 localX = realX
                 localY = realY
-                sendPointCoords(c[canv], realX, realY)
+                sendPointCoords(c[canv].name, realX, realY)
             })
 
             cv.addEventListener('touchstart', function(e) {
@@ -152,7 +151,7 @@
                 var { realX, realY } = getRealCoordinates(c[canv], e.touches[0].clientX, e.touches[0].clientY);
                 localX = realX
                 localY = realY
-                sendPointCoords(c[canv], realX, realY)
+                sendPointCoords(c[canv].name, realX, realY)
             })
 
             cv.addEventListener('touchmove', function(e) {
