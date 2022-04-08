@@ -143,7 +143,7 @@ async def websocket_endpoint(canvas_id: uuid.UUID, websocket: WebSocket):
 
                         await rpool.publish(f"draw:{canvas_id}", res_json)
                         if res["t"] == "clear":
-                            await rpool.delete("drawstream:{canvas_id}")
+                            await rpool.delete(f"drawstream:{canvas_id}")
                         else:
                             await rpool.xadd(
                                 name=f"drawstream:{canvas_id}",
