@@ -3,12 +3,13 @@ import json
 from os import environ
 from time import time
 from typing import Literal, Optional
+import uuid
 
 import redis.exceptions
 import redis.asyncio as aioredis
 
 from fastapi import BackgroundTasks, FastAPI, WebSocket
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, constr, Field, ValidationError
 
 REDIS_HOST = environ.get('REDIS_HOST') or 'localhost'
@@ -25,44 +26,49 @@ rpool = aioredis.Redis(
 class ConnectionManager:
     """ Class for managing WebSocket connections"""
     def __init__(self):
-        self.active_connections: list = []
-        self.subscribed = False
+        self.active_connections: dict = {}
+        self.subscribed = {}
     
-    async def subscribe(self):
+    async def subscribe(self, canvas_id):
         """ Hack to enable background subscription to Redis pubsub. """
-        self.subscribed = True
-        while self.subscribed:
+        self.subscribed[canvas_id] = True
+        while self.subscribed[canvas_id]:
             try:
                 sub = rpool.pubsub()
-                await sub.subscribe("draw")
-                print("subscribed")
+                await sub.subscribe(f"draw:{canvas_id}")
                 async for message in sub.listen():
                     try:
                         data = json.loads(message["data"])
                         data["sdelay"] = f"{(time() - data['stime']) * 1000:.3f}"
-                        await self.send_broadcast(data)
+                        await self.send_broadcast(canvas_id, data)
                     except TypeError as e:
                         pass
+                    if not self.subscribed[canvas_id]:
+                        break
             except redis.exceptions.ConnectionError:
-                self.subscribed = False
+                self.subscribed[canvas_id] = False
 
-    async def connect(self, websocket: WebSocket) -> None:
+    async def connect(self, canvas_id: uuid.UUID, websocket: WebSocket) -> None:
         """ Accept WebSocket connection and subscribe to available streams. """
-        self.active_connections.append(websocket)
+        if canvas_id not in self.active_connections:
+            self.active_connections[canvas_id] = []
+        self.active_connections[canvas_id].append(websocket)
         await websocket.accept()
 
-    def disconnect(self, websocket: WebSocket) -> None:
+    def disconnect(self, canvas_id: uuid.UUID, websocket: WebSocket) -> None:
         """ On client disconnection remove client from active connections. """
-        self.active_connections.remove(websocket)
+        self.active_connections[canvas_id].remove(websocket)
+        if len(self.active_connections[canvas_id]) == 0:
+            self.subscribed[canvas_id] = False
 
     @staticmethod
     async def send(websocket: WebSocket, message):
         """ Send JSON message to a single client."""
         await websocket.send_json(message)
 
-    async def send_broadcast(self, message) -> None:
+    async def send_broadcast(self, canvas_id: uuid.UUID, message) -> None:
         """ Send broadcast JSON message to all active clients. """
-        for connection in self.active_connections:
+        for connection in self.active_connections[canvas_id]:
             await connection.send_json(message)
 
 manager = ConnectionManager()
@@ -115,17 +121,17 @@ TYPES = {
     "clear": CanvasClear
 }
 
-@app.websocket("/ws/")
-async def websocket_endpoint(websocket: WebSocket):
+@app.websocket("/ws/{canvas_id}")
+async def websocket_endpoint(canvas_id: uuid.UUID, websocket: WebSocket):
     """ Draw client websocket endpoint. """
-    await manager.connect(websocket)
+    await manager.connect(canvas_id, websocket)
     print(f"Connected {websocket}")
     try:
         while True:
             res = await websocket.receive_json()
             if "t" in res.keys():
                 if res["t"] == "connected":
-                    await read_draw_stream(websocket)
+                    await read_draw_stream(canvas_id, websocket)
                 else:
                     try:
                         res_json = ""
@@ -135,12 +141,12 @@ async def websocket_endpoint(websocket: WebSocket):
                         else:
                             await manager.send(websocket, {"error": "invalid type"})
 
-                        await rpool.publish("draw", res_json)
+                        await rpool.publish(f"draw:{canvas_id}", res_json)
                         if res["t"] == "clear":
-                            await rpool.delete("drawstream")
+                            await rpool.delete("drawstream:{canvas_id}")
                         else:
                             await rpool.xadd(
-                                name="drawstream",
+                                name=f"drawstream:{canvas_id}",
                                 fields={"json": res_json}
                             )
                     except ValidationError:
@@ -150,19 +156,19 @@ async def websocket_endpoint(websocket: WebSocket):
 
     except Exception as e:
         print(f"Client disconnected: {websocket}")
-        manager.disconnect(websocket)
+        manager.disconnect(canvas_id, websocket)
 
-@app.get("/sub")
-async def subscribe(background_tasks: BackgroundTasks):
+@app.get("/sub/{canvas_id}")
+async def subscribe(canvas_id: uuid.UUID, background_tasks: BackgroundTasks):
     """ Subscribe needs to be called by one client for background processing. """
-    if not manager.subscribed:
-        background_tasks.add_task(manager.subscribe)    
+    if canvas_id not in manager.subscribed or not manager.subscribed[canvas_id]:
+        background_tasks.add_task(manager.subscribe, canvas_id)
 
-async def read_draw_stream(websocket: WebSocket):
+async def read_draw_stream(canvas_id: uuid.UUID, websocket: WebSocket):
     start_id = 0
     while True:
         results = await rpool.xread(
-            streams={"drawstream": start_id},
+            streams={f"drawstream:{canvas_id}": start_id},
             count=100
         )
         if results:
@@ -171,6 +177,10 @@ async def read_draw_stream(websocket: WebSocket):
             start_id = results[0][1][-1][0]
         else:
             break
+
+@app.get("/uuid/new", response_class=JSONResponse)
+def get_new_uuid():
+    return {"uuid": uuid.uuid4()}
 
 async def main():
     pass

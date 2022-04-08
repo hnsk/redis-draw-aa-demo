@@ -42,16 +42,33 @@
         })
 
         let ws;
-
-        function startWebSocket() {
-            if (location.protocol !== 'https:') {
-                ws = new WebSocket(`ws://${window.location.host}/ws/`)
-                fetch(`http://${window.location.host}/sub`)
+        function getCanvasUUID() {
+            let canvas_uuid = window.location.hash.substr(1)
+            if (canvas_uuid.length < 2) {
+                fetch(`${location.protocol}//${window.location.host}/uuid/new`)
+                    .then(response => response.json())
+                    .then(data => {
+                        window.location.hash = `#${data.uuid}`
+                        startWebSocket(data.uuid)
+                        canvas_uuid = data.uuid
+                    })
             }
             else {
-                ws = new WebSocket(`wss://${window.location.host}/ws/`)
-                fetch(`https://${window.location.host}/sub`)
+                startWebSocket(canvas_uuid)
             }
+        }
+
+        getCanvasUUID()
+
+        function startWebSocket(canvas_uuid) {
+            if (location.protocol !== 'https:') {
+                ws = new WebSocket(`ws://${window.location.host}/ws/${canvas_uuid}`)
+            }
+            else {
+                ws = new WebSocket(`wss://${window.location.host}/ws/${canvas_uuid}`)
+            }
+
+            fetch(`${location.protocol}//${window.location.host}/sub/${canvas_uuid}`)
 
             ws.onopen = function() {
                 clearAllCanvases()
@@ -81,10 +98,12 @@
 
             ws.onclose = function() {
                 ws = null
-                setTimeout(startWebSocket, 2000)
+                setTimeout(() => {
+                    startWebSocket(canvas_uuid)
+                },
+                2000)
             }
         }
-        startWebSocket()
 
         function wsSendObject(obj) {
             const d = new Date()
