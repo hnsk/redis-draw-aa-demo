@@ -4,7 +4,8 @@ from os import environ
 from time import time
 from typing import Literal, Optional
 
-import redis.asyncio as redis
+import redis.exceptions
+import redis.asyncio as aioredis
 
 from fastapi import BackgroundTasks, FastAPI, WebSocket
 from fastapi.responses import FileResponse
@@ -14,7 +15,7 @@ REDIS_HOST = environ.get('REDIS_HOST') or 'localhost'
 REDIS_PORT = int(environ.get('REDIS_PORT') or '6379')
 REDIS_PASS = environ.get('REDIS_PASS') or None
 
-rpool = redis.Redis(
+rpool = aioredis.Redis(
     host=REDIS_HOST,
     port=REDIS_PORT,
     password=REDIS_PASS,
@@ -30,14 +31,20 @@ class ConnectionManager:
     async def subscribe(self):
         """ Hack to enable background subscription to Redis pubsub. """
         self.subscribed = True
-        sub = rpool.pubsub()
-        await sub.subscribe("draw")
-        print("subscribed")
-        async for message in sub.listen():
-            if message["data"] != 1:
-                data = json.loads(message["data"])
-                data["sdelay"] = f"{(time() - data['stime']) * 1000:.3f}"
-                await self.send_broadcast(data)
+        while self.subscribed:
+            try:
+                sub = rpool.pubsub()
+                await sub.subscribe("draw")
+                print("subscribed")
+                async for message in sub.listen():
+                    try:
+                        data = json.loads(message["data"])
+                        data["sdelay"] = f"{(time() - data['stime']) * 1000:.3f}"
+                        await self.send_broadcast(data)
+                    except TypeError as e:
+                        pass
+            except redis.exceptions.ConnectionError:
+                self.subscribed = False
 
     async def connect(self, websocket: WebSocket) -> None:
         """ Accept WebSocket connection and subscribe to available streams. """
@@ -93,14 +100,14 @@ class CanvasLine(BaseModel):
     color: Optional[constr(max_length=9, regex="^#")]
     width: int = Field(ge=1, le=10)
     stime: float
-    ctime: float
+    ctime: int
 
 class CanvasClear(BaseModel):
     """ Basemodel to define a clear canvas message. """
     t: Literal["clear"]
     c: Optional[str]
     stime: float
-    ctime: float
+    ctime: int
 
 TYPES = {
     "point": CanvasPoint,
@@ -142,7 +149,6 @@ async def websocket_endpoint(websocket: WebSocket):
                 await manager.send(websocket, {"error": "no message type specified"})
 
     except Exception as e:
-        print(e)
         print(f"Client disconnected: {websocket}")
         manager.disconnect(websocket)
 
@@ -150,7 +156,6 @@ async def websocket_endpoint(websocket: WebSocket):
 async def subscribe(background_tasks: BackgroundTasks):
     """ Subscribe needs to be called by one client for background processing. """
     if not manager.subscribed:
-        print("subscribing")
         background_tasks.add_task(manager.subscribe)    
 
 async def read_draw_stream(websocket: WebSocket):

@@ -42,14 +42,49 @@
         })
 
         let ws;
-        if (location.protocol !== 'https:') {
-            ws = new WebSocket(`ws://${window.location.host}/ws/`)
-            fetch(`http://${window.location.host}/sub`)
+
+        function startWebSocket() {
+            if (location.protocol !== 'https:') {
+                ws = new WebSocket(`ws://${window.location.host}/ws/`)
+                fetch(`http://${window.location.host}/sub`)
+            }
+            else {
+                ws = new WebSocket(`wss://${window.location.host}/ws/`)
+                fetch(`https://${window.location.host}/sub`)
+            }
+
+            ws.onopen = function() {
+                clearAllCanvases()
+                ws.send(JSON.stringify({
+                    t: "connected"
+                }))
+            }
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data)
+                const d = new Date()
+                data.cdelay = d.getTime() - data.ctime
+                wsReceived++
+                wsreceived.textContent = wsReceived
+                serverdelay.textContent = data.sdelay
+                clientdelay.textContent = data.cdelay
+                //console.log(data)
+                if (data.t === 'line') {
+                    drawAllCanvas(data.fx, data.fy, data.tx, data.ty, data.color, data.width)
+                }
+                else if (data.t === 'point') {
+                    drawPointToAllAllCanvas(data.x, data.y, data.color, data.width)
+                }
+                else if (data.t === 'clear') {
+                    clearAllCanvases()
+                }
+            }
+
+            ws.onclose = function() {
+                ws = null
+                setTimeout(startWebSocket, 2000)
+            }
         }
-        else {
-            ws = new WebSocket(`wss://${window.location.host}/ws/`)
-            fetch(`https://${window.location.host}/sub`)
-        }
+        startWebSocket()
 
         function wsSendObject(obj) {
             const d = new Date()
@@ -57,31 +92,6 @@
             ws.send(JSON.stringify(obj))
             wsSent++
             wssent.textContent = wsSent
-        }
-
-        ws.onopen = function() {
-            ws.send(JSON.stringify({
-                t: "connected"
-            }))
-        }
-        ws.onmessage = (event) => {
-            const data = JSON.parse(event.data)
-            const d = new Date()
-            data.cdelay = d.getTime() - data.ctime
-            wsReceived++
-            wsreceived.textContent = wsReceived
-            serverdelay.textContent = data.sdelay
-            clientdelay.textContent = data.cdelay
-            //console.log(data)
-            if (data.t === 'line') {
-                drawAllCanvas(data.fx, data.fy, data.tx, data.ty, data.color, data.width)
-            }
-            else if (data.t === 'point') {
-                drawPointToAllAllCanvas(data.x, data.y, data.color, data.width)
-            }
-            else if (data.t === 'clear') {
-                clearAllCanvases()
-            }
         }
 
         function sendCanvasCoords(canvas, fx, fy, tx, ty) {
