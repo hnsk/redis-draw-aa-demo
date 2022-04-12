@@ -176,7 +176,6 @@ async def websocket_endpoint(canvas_id: uuid.UUID, websocket: WebSocket):
 async def subscribe(canvas_id: uuid.UUID, background_tasks: BackgroundTasks):
     """ Subscribe needs to be called by one client for background processing. """
     if not manager.subscribed[canvas_id]:
-        print("foo")
         background_tasks.add_task(manager.subscribe, canvas_id)
 
 async def read_stream(canvas_id: uuid.UUID, stream: str, websocket: WebSocket):

@@ -8,8 +8,8 @@
         <canvas id="canvas" style="border: 1px solid" width="1000" height="700"></canvas>
         </div>
         <br /><hr />
-        <input type="text" id="colorpicker" size=15 data-coloris value="#000000"></input>
-        <select name="brushwidth" id="brushwidth">
+        <input type="text" id="colorpicker" size=15 data-coloris value="#000000" style="font-size: 32px;"></input>
+        <select name="brushwidth" id="brushwidth" style="font-size: 32px;">
             <option value="1">1px</option>
             <option value="2" selected >2px</option>
             <option value="3">3px</option>
@@ -28,19 +28,25 @@
         <h3>Received: <span id="wsreceived"></span></h3>
         <h3>Sent: <span id="wssent"></span></h3>
         <h3>Delay: Server - <span id="serverdelay"></span>ms, Client <span id="clientdelay"></span>ms</h3>
-        <button onclick="sendCanvasClear()">Clear</button>
+        <button onclick="sendCanvasClear()">Clear Canvas and Delete history for everyone.</button>
     </body>
     <script>
+
+        function isValidUUID(str) {
+            const regexExp = /^[0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{12}$/gi;
+            return regexExp.test(str)
+        }
+
         let wsReceived = 0;
         let wsSent = 0;
-        var coords = document.getElementById("coords")
-        var wsreceived = document.getElementById("wsreceived")
-        var wssent = document.getElementById("wssent")
-        var serverdelay = document.getElementById("serverdelay")
-        var clientdelay = document.getElementById("clientdelay")
-        var colorpicker = document.getElementById("colorpicker")
-        var brushwidth = document.getElementById("brushwidth")
-        var chatinput = document.getElementById("chatinput")
+        const coords = document.getElementById("coords")
+        const wsreceived = document.getElementById("wsreceived")
+        const wssent = document.getElementById("wssent")
+        const serverdelay = document.getElementById("serverdelay")
+        const clientdelay = document.getElementById("clientdelay")
+        const colorpicker = document.getElementById("colorpicker")
+        const brushwidth = document.getElementById("brushwidth")
+        const chatinput = document.getElementById("chatinput")
 
         chatinput.addEventListener("keyup", function(e) {
 
@@ -59,16 +65,14 @@
         })
 
         let ws;
-        function getCanvasUUID() {
+        async function getCanvasUUID() {
             let canvas_uuid = window.location.hash.substr(1)
-            if (canvas_uuid.length < 2) {
-                fetch(`${location.protocol}//${window.location.host}/uuid/new`)
-                    .then(response => response.json())
-                    .then(data => {
-                        window.location.hash = `#${data.uuid}`
-                        startWebSocket(data.uuid)
-                        canvas_uuid = data.uuid
-                    })
+            if (!(isValidUUID(canvas_uuid))) {
+                const response = await fetch(`${location.protocol}//${window.location.host}/uuid/new`)
+                const data = await response.json()
+                window.location.hash = `#${data.uuid}`
+                canvas_uuid = data.uuid
+                startWebSocket(data.uuid)
             }
             else {
                 startWebSocket(canvas_uuid)
@@ -100,7 +104,7 @@
                 wsreceived.textContent = wsReceived
                 serverdelay.textContent = data.sdelay
                 clientdelay.textContent = data.cdelay
-                console.log(data)
+                //console.log(data)
                 if (data.t === 'line') {
                     drawAllCanvas(data.fx, data.fy, data.tx, data.ty, data.color, data.width)
                 }
@@ -164,7 +168,7 @@
             })
         }
 
-        var canvases = [
+        const canvases = [
             "canvas"
         ]
 
@@ -172,7 +176,7 @@
         let localX = 0
         let localY = 0
 
-        var c = {}
+        let c = {}
         for (let canv of canvases) {
             cv = document.getElementById(canv)
             c[canv] = {
@@ -183,14 +187,14 @@
             }
             cv.addEventListener('mousemove', function(e) {
                 if (e.buttons !== 1) return;
-                var { realX, realY } = getRealCoordinates(c[canv], e.clientX, e.clientY);
+                const { realX, realY } = getRealCoordinates(c[canv], e.clientX, e.clientY);
                 sendCanvasCoords(c[canv].name, localX, localY, realX, realY)
                 localX = realX
                 localY = realY
             });
 
             cv.addEventListener('mousedown', function(e) {
-                var { realX, realY } = getRealCoordinates(c[canv], e.clientX, e.clientY);
+                const { realX, realY } = getRealCoordinates(c[canv], e.clientX, e.clientY);
                 localX = realX
                 localY = realY
                 sendPointCoords(c[canv].name, realX, realY)
@@ -199,7 +203,7 @@
             cv.addEventListener('touchstart', function(e) {
                 e.preventDefault()
 
-                var { realX, realY } = getRealCoordinates(c[canv], e.touches[0].clientX, e.touches[0].clientY);
+                const { realX, realY } = getRealCoordinates(c[canv], e.touches[0].clientX, e.touches[0].clientY);
                 localX = realX
                 localY = realY
                 sendPointCoords(c[canv].name, realX, realY)
@@ -207,7 +211,7 @@
 
             cv.addEventListener('touchmove', function(e) {
                 e.preventDefault()
-                var { realX, realY } = getRealCoordinates(c[canv], e.touches[0].clientX, e.touches[0].clientY);
+                const { realX, realY } = getRealCoordinates(c[canv], e.touches[0].clientX, e.touches[0].clientY);
                 sendCanvasCoords(c[canv].name, localX, localY, realX, realY)
                 localX = realX
                 localY = realY
@@ -257,11 +261,9 @@
         }
 
         function getRealCoordinates(canvas, x, y) {
-            var rect = canvas.canvas.getBoundingClientRect();
-            var realX = x - rect.left
-            var realY = y - rect.top;
-            realX = realX >= 0 ? realX : 0;
-            realY = realY >= 0 ? realY : 0;
+            const rect = canvas.canvas.getBoundingClientRect();
+            const realX = x - rect.left
+            const realY = y - rect.top;
             return { realX, realY };
         }
 
