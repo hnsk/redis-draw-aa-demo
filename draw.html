@@ -185,25 +185,47 @@
                 ctx: cv.getContext('2d'),
                 source: 'foo'
             }
+
             cv.addEventListener('mousemove', function(e) {
-                if (e.buttons !== 1) return;
                 const { realX, realY } = getRealCoordinates(c[canv], e.clientX, e.clientY);
-                sendCanvasCoords(c[canv].name, localX, localY, realX, realY)
-                localX = realX
-                localY = realY
-            });
+                coords.textContent = `${realX}, ${realY}`
+                if (window.getSelection) {window.getSelection().removeAllRanges();}
+                if (e.buttons !== 1) return;
+                if (localX === -1 && localY === -1) {
+                    localX = realX
+                    localY = realY
+                }
+                if (localX !== realX || localY !== realY) {
+                    sendCanvasCoords(c[canv].name, localX, localY, realX, realY)
+                    localX = realX
+                    localY = realY
+                }
+            })
 
             cv.addEventListener('mousedown', function(e) {
                 const { realX, realY } = getRealCoordinates(c[canv], e.clientX, e.clientY);
-                localX = realX
-                localY = realY
+                coords.textContent = `${realX}, ${realY}`
+                if (localX === -1 && localY === -1) {
+                    localX = realX
+                    localY = realY
+                }
+                if (localX !== realX || localY !== realY) {
+                    sendPointCoords(c[canv].name, realX, realY)
+                    localX = realX
+                    localY = realY
+                }
                 sendPointCoords(c[canv].name, realX, realY)
+            })
+
+            cv.addEventListener('mouseout', function() {
+                localX = -1
+                localY = -1
             })
 
             cv.addEventListener('touchstart', function(e) {
                 e.preventDefault()
-
                 const { realX, realY } = getRealCoordinates(c[canv], e.touches[0].clientX, e.touches[0].clientY);
+                coords.textContent = `${realX}, ${realY}`
                 localX = realX
                 localY = realY
                 sendPointCoords(c[canv].name, realX, realY)
@@ -212,9 +234,12 @@
             cv.addEventListener('touchmove', function(e) {
                 e.preventDefault()
                 const { realX, realY } = getRealCoordinates(c[canv], e.touches[0].clientX, e.touches[0].clientY);
-                sendCanvasCoords(c[canv].name, localX, localY, realX, realY)
-                localX = realX
-                localY = realY
+                coords.textContent = `${realX}, ${realY}`
+                if (localX !== realX || localY !== realY) {
+                    sendCanvasCoords(c[canv].name, localX, localY, realX, realY)
+                    localX = realX
+                    localY = realY
+                }
             })
         }
 
@@ -232,7 +257,7 @@
             canvas.ctx.lineTo(tx, ty)
             canvas.ctx.strokeStyle = color
             canvas.ctx.stroke()
-            coords.textContent = `${tx}, ${ty}`
+            //coords.textContent = `${tx}, ${ty}`
         }
 
         function drawPointToAllAllCanvas(x, y, color, width) {
@@ -247,7 +272,7 @@
             canvas.ctx.lineWidth = 1
             canvas.ctx.arc(x, y, width/2, 0, 2*Math.PI)
             canvas.ctx.fill()
-            coords.textContent = `${x}, ${y}`
+            //coords.textContent = `${x}, ${y}`
         }
 
         function clearAllCanvases() {
