@@ -4,12 +4,10 @@ services:
   redis:
     image: "redis/redis-stack-server:latest"
 
-  mainapp:
+  backend:
     build: .
     depends_on:
       - "redis"
-    ports:
-      - 8000:8000
 
     links:
       - "redis:redis"
@@ -20,3 +18,12 @@ services:
     deploy:
       restart_policy:
         condition: on-failure
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - "backend"
+    links:
+      - "backend:backend"
+    ports:
+      - 8000:80

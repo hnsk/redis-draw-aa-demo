@@ -9,7 +9,7 @@ import redis.exceptions
 import redis.asyncio as aioredis
 
 from fastapi import BackgroundTasks, FastAPI, WebSocket
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, constr, Field, ValidationError
 
 REDIS_HOST = environ.get('REDIS_HOST') or 'localhost'
@@ -28,7 +28,6 @@ class ConnectionManager:
     def __init__(self):
         self.active_connections: dict = {}
         self.subscribed = {}
-    
     async def subscribe(self, canvas_id):
         """ Hack to enable background subscription to Redis pubsub. """
         self.subscribed[canvas_id] = True
@@ -81,14 +80,10 @@ app = FastAPI()
 async def startup_event():
     pass
 
-@app.get("/")
-async def read_index():
-    return FileResponse('draw.html')
-
 class CanvasPoint(BaseModel):
     """ BaseModel to define draw point message. """
     t: Literal["point"]
-    c: str
+    c: Optional[str]
     x: int
     y: int
     color: Optional[constr(max_length=9, regex="^#")]
@@ -99,7 +94,7 @@ class CanvasPoint(BaseModel):
 class CanvasLine(BaseModel):
     """ BaseModel to define draw line message. """
     t: Literal["line"]
-    c: str
+    c: Optional[str]
     fx: int
     fy: int
     tx: int
@@ -172,7 +167,7 @@ async def websocket_endpoint(canvas_id: uuid.UUID, websocket: WebSocket):
         print(f"Client disconnected: {websocket}")
         manager.disconnect(canvas_id, websocket)
 
-@app.get("/sub/{canvas_id}")
+@app.get("/api/sub/{canvas_id}")
 async def subscribe(canvas_id: uuid.UUID, background_tasks: BackgroundTasks):
     """ Subscribe needs to be called by one client for background processing. """
     if not manager.subscribed[canvas_id]:
@@ -193,7 +188,7 @@ async def read_stream(canvas_id: uuid.UUID, stream: str, websocket: WebSocket):
         else:
             break
 
-@app.get("/uuid/new", response_class=JSONResponse)
+@app.get("/api/uuid/new", response_class=JSONResponse)
 def get_new_uuid():
     return {"uuid": uuid.uuid4()}
 
