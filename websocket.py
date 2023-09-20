@@ -10,7 +10,7 @@ import redis.asyncio as aioredis
 
 from fastapi import BackgroundTasks, FastAPI, WebSocket
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, constr, Field, ValidationError
+from pydantic.v1 import BaseModel, constr, Field, ValidationError
 
 REDIS_HOST = environ.get('REDIS_HOST') or 'localhost'
 REDIS_PORT = int(environ.get('REDIS_PORT') or '6379')
